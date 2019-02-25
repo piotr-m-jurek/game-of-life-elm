@@ -11,7 +11,7 @@ import Time
 
 gridSize : GridSize
 gridSize =
-    30
+    20
 
 
 cellSize : CellSize
@@ -70,6 +70,7 @@ type alias CellSize =
 type Msg
     = NoOp
     | InitialSeed (List Cell)
+    | Tick Time.Posix
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -81,17 +82,26 @@ update msg model =
         InitialSeed d ->
             ( { model | grid = Array.fromList d }, Cmd.none )
 
+        Tick _ ->
+            ( model, Cmd.none )
+
+
+
+{--
+-- Views
+--}
+
 
 view : Model -> Html Msg
 view model =
     div
-        [ style "display" "flex"
+        [ style "width" "100%"
+        , style "display" "flex"
         , style "flex-direction" "column"
+        , style "justify-content" "center"
+        , style "align-items" "center"
         ]
-        [ viewGrid model.grid
-        , hr [] []
-        , div [] [ model |> Debug.toString |> text ]
-        ]
+        [ viewGrid model.grid ]
 
 
 colorForCell : Cell -> String
@@ -107,7 +117,8 @@ colorForCell cell =
 viewCell : Cell -> Html Msg
 viewCell cell =
     div
-        [ style "height" (String.fromInt cellSize ++ "px")
+        [ class "cell"
+        , style "height" (String.fromInt cellSize ++ "px")
         , style "width" (String.fromInt cellSize ++ "px")
         , style "background" (colorForCell cell)
         , style "margin" "1px"
@@ -141,9 +152,15 @@ viewGrid grid =
         )
 
 
+
+{-
+   -- maintenance
+-}
+
+
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.none
+    Time.every 1000 Tick
 
 
 init : () -> ( Model, Cmd Msg )
