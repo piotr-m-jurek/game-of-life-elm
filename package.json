@@ -1,6 +1,6 @@
 {
-  "name": "elm-bem",
-  "version": "1.0.0",
+  "name": "game-of-life",
+  "version": "0.0.1",
   "description": "",
   "main": "index.js",
   "scripts": {

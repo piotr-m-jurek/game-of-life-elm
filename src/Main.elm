@@ -1,90 +1,174 @@
-module Main exposing (Model, Msg(..), view)
+module Main exposing (main)
 
+import Array exposing (Array)
 import Browser
-import Browser.Events
 import Html exposing (..)
-import Html.Attributes exposing (..)
-import Html.Events exposing (..)
-import Json.Decode exposing (succeed)
-import List exposing (..)
+import Html.Attributes exposing (class, style)
+import Html.Events as Ev
+import Random exposing (Generator)
+import Time
+
+
+gridSize : GridSize
+gridSize =
+    30
+
+
+cellSize : CellSize
+cellSize =
+    15
+
+
+type Cell
+    = Alive
+    | Dead
+
+
+type alias Grid =
+    Array Cell
+
+
+takeRow : Grid -> Int -> List Cell
+takeRow grid n =
+    let
+        cells =
+            Array.toList grid
+
+        skipCells =
+            n * gridSize
+    in
+    cells |> List.drop skipCells |> List.take gridSize
+
+
+idxFromXY : Int -> Int -> Int
+idxFromXY x y =
+    gridSize * y + x
+
+
+getXY : Grid -> Int -> Int -> Maybe Cell
+getXY grid x y =
+    Array.get (idxFromXY x y) grid
+
+
+setXY : Grid -> Int -> Int -> Cell -> Grid
+setXY grid x y val =
+    Array.set (idxFromXY x y) val grid
 
 
 type alias Model =
-    { count : Int, dragPos : Maybe Float }
+    { grid : Grid }
+
+
+type alias GridSize =
+    Int
+
+
+type alias CellSize =
+    Int
 
 
 type Msg
-    = Inc
-    | Dec
-    | DragStarted
-    | Follow
+    = NoOp
+    | InitialSeed (List Cell)
 
 
-update : Msg -> Model -> Model
+update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case Debug.log "msg " msg of
-        Inc ->
-            { model | count = model.count + 1 }
+    case msg of
+        NoOp ->
+            ( model, Cmd.none )
 
-        Dec ->
-            { model | count = model.count - 1 }
-
-        DragStarted ->
-            model
-
-        Follow ->
-            model
-
-
-bindBem : String -> ( List (Html.Html msg) -> Html.Html msg, String -> List (Html.Html msg) -> Html.Html msg )
-bindBem className =
-    let
-        bindBlock =
-            div [ class className ]
-
-        bindElement =
-            \e -> div [ class (className ++ "__" ++ e) ]
-    in
-    ( bindBlock, bindElement )
-
-
-mainWrapper : List (Html Msg) -> Html Msg
-mainWrapper =
-    div
-        [ style "height" "100%"
-        , style "width" "100%"
-        , style "display" "flex"
-        , class "wrapper"
-        , onMouseDown DragStarted
-        ]
+        InitialSeed d ->
+            ( { model | grid = Array.fromList d }, Cmd.none )
 
 
 view : Model -> Html Msg
 view model =
-    let
-        ( block, element ) =
-            bindBem "Counter"
-    in
-    block
-        [ element "Buttons"
-            [ button [ onClick Inc ] [ text "+" ]
-            , button [ onClick Dec ] [ text "-" ]
-            ]
-        , element "Output" [ text (String.fromInt model.count) ]
+    div
+        [ style "display" "flex"
+        , style "flex-direction" "column"
+        ]
+        [ viewGrid model.grid
+        , hr [] []
+        , div [] [ model |> Debug.toString |> text ]
         ]
 
 
-init : Model
-init =
-    { count = 0
-    , dragPos = Nothing
-    }
+colorForCell : Cell -> String
+colorForCell cell =
+    case cell of
+        Alive ->
+            "red"
+
+        Dead ->
+            "black"
 
 
-main : Program () Model Msg
+viewCell : Cell -> Html Msg
+viewCell cell =
+    div
+        [ style "height" (String.fromInt cellSize ++ "px")
+        , style "width" (String.fromInt cellSize ++ "px")
+        , style "background" (colorForCell cell)
+        , style "margin" "1px"
+        ]
+        [ text "" ]
+
+
+viewRow : List Cell -> Html Msg
+viewRow row =
+    div
+        [ style "display" "flex"
+        , style "flex-direction" "row"
+        ]
+        (List.map
+            viewCell
+            row
+        )
+
+
+viewGrid : Grid -> Html Msg
+viewGrid grid =
+    div
+        [ class "grid"
+        , style "display" "flex"
+        , style "flex-direction" "column"
+        , style "align-items" "center"
+        ]
+        (List.range 0 (gridSize - 1)
+            |> List.map (takeRow grid)
+            |> List.map viewRow
+        )
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    Sub.none
+
+
+init : () -> ( Model, Cmd Msg )
+init _ =
+    ( { grid =
+            Array.fromList []
+      }
+    , Random.generate InitialSeed (generateGrid (gridSize * gridSize))
+    )
+
+
+generateCell : Generator Cell
+generateCell =
+    Random.uniform Dead [ Alive ]
+
+
+generateGrid : Int -> Generator (List Cell)
+generateGrid s =
+    Random.list s generateCell
+
+
 main =
-    Browser.sandbox
+    Browser.element
         { init = init
         , view = view
         , update = update
+        , subscriptions = subscriptions
         }
