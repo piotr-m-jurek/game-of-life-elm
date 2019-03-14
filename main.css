@@ -14,10 +14,25 @@ html, body {
 
 .grid {
   background-color: #fff;
-  padding: 32px;
+  border: 2px solid black;
+  /* padding: 32px; */
   box-shadow: inset 0px 0px 0px 0px rgba(0,0,0,0.5);
 }
 
 .cell {
   border-radius: 1px;
+  /* border: 1px solid  */
+}
+
+button {
+  background: white;
+  margin: 16px 4px;
+  color: black;
+  border: 2px solid black;
+  font-weight: bold;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
 }

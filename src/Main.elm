@@ -23,21 +23,98 @@ type Cell
     = Alive
     | Dead
 
+toggleCell : Cell -> Cell
+toggleCell cell =
+    case cell of
+        Alive -> Dead             
+    
+        Dead -> Alive
+            
+
 
 type alias Grid =
     Array Cell
 
 
-takeRow : Grid -> Int -> List Cell
-takeRow grid n =
-    let
-        cells =
-            Array.toList grid
+stepCell : Int -> Cell -> Cell
+stepCell aliveNeighbours cell =
+    case aliveNeighbours of
+        3 ->
+            if cell == Dead then
+                Alive
 
-        skipCells =
-            n * gridSize
+            else
+                cell
+
+        2 ->
+            cell
+
+        _ ->
+            Dead
+
+
+getNeighbours : Grid -> ( Int, Int ) -> List Cell
+getNeighbours grid position =
+    let
+        dist : ( Int, Cell ) -> ( Int, Cell )
+        dist =
+            Tuple.mapFirst <| distance position << xyFromIdx
+
+        isNeighbour : ( Int, Cell ) -> Bool
+        isNeighbour =
+            Tuple.first >> (==) 1
     in
-    cells |> List.drop skipCells |> List.take gridSize
+    grid
+        |> Array.toIndexedList
+        |> List.map dist
+        |> List.filter isNeighbour
+        |> List.map Tuple.second
+
+
+countAliveNeighbours : Grid -> ( Int, Int ) -> Int
+countAliveNeighbours grid position =
+    let
+        neighbours =
+            getNeighbours grid position
+    in
+    neighbours
+        |> List.filter ((==) Alive)
+        |> List.length
+
+
+
+-- ((x, y), Cell)
+-- stepGrid : Grid -> Grid
+
+
+stepGrid grid =
+    let
+        countAlive : Int -> Int
+        countAlive pos =
+            xyFromIdx pos |> countAliveNeighbours grid  
+    in
+    grid
+        |> Array.indexedMap (\idx -> \cell -> stepCell (countAlive idx) cell)
+
+
+
+-- |> Array.map (\( alive, cell ) -> stepCell cell alive)
+-- List.length (List.filter (== Alive) (getNeighbours _ _))
+
+
+takeRows : Int -> List Cell -> List (List Cell)
+takeRows n cells =
+    case cells of
+        _ :: _ ->
+            List.take n cells :: (takeRows n <| List.drop n cells)
+
+        [] ->
+            []
+
+
+takeRowsFromGrid : Int -> Grid -> List (List Cell)
+takeRowsFromGrid n =
+    takeRows n << Array.toList
 
 
 idxFromXY : Int -> Int -> Int
@@ -45,14 +122,27 @@ idxFromXY x y =
     gridSize * y + x
 
 
-getXY : Grid -> Int -> Int -> Maybe Cell
-getXY grid x y =
-    Array.get (idxFromXY x y) grid
+xyFromIdx : Int -> ( Int, Int )
+xyFromIdx idx =
+    ( modBy gridSize idx, idx // gridSize )
 
 
-setXY : Grid -> Int -> Int -> Cell -> Grid
-setXY grid x y val =
+getXY : Grid -> (Int, Int) -> Cell
+getXY grid (x, y) =
+    grid
+        |> Array.get (idxFromXY x y)
+        |> Maybe.withDefault Dead
+
+
+setXY : Grid -> Cell -> (Int, Int) -> Grid
+setXY grid val (x, y) =
     Array.set (idxFromXY x y) val grid
+
+
+distance : ( Int, Int ) -> ( Int, Int ) -> Int
+distance ( x1, y1 ) ( x2, y2 ) =
+    max (abs <| x2 - x1) (abs <| y2 - y1)
+
 
 
 type alias Model =
@@ -69,21 +159,35 @@ type alias CellSize =
 
 type Msg
     = NoOp
-    | InitialSeed (List Cell)
+    | Seed (List Cell)
+    | GenerateRandomSeed
     | Tick Time.Posix
+    | Step
+    | Toggle (Int, Int)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
+    case Debug.log "msgs" msg of
         NoOp ->
             ( model, Cmd.none )
 
-        InitialSeed d ->
+        Seed d ->
             ( { model | grid = Array.fromList d }, Cmd.none )
 
         Tick _ ->
             ( model, Cmd.none )
+
+        GenerateRandomSeed ->
+            ( model, randomInitialSeedMsg )
+
+        Step ->
+            ( { model | grid = stepGrid model.grid }, Cmd.none )
+
+        Toggle position ->
+            ( { model | grid = setXY model.grid (toggleCell <| getXY model.grid position) position }, Cmd.none)
+
+        
 
 
 
@@ -101,39 +205,42 @@ view model =
         , style "justify-content" "center"
         , style "align-items" "center"
         ]
-        [ viewGrid model.grid ]
+        [ viewGrid model.grid
+        , viewControls
+        ]
 
 
 colorForCell : Cell -> String
 colorForCell cell =
     case cell of
         Alive ->
-            "red"
-
-        Dead ->
             "black"
 
+        Dead ->
+            "white"
 
-viewCell : Cell -> Html Msg
-viewCell cell =
+
+viewCell : Int -> Cell -> Html Msg
+viewCell idx cell =
     div
         [ class "cell"
         , style "height" (String.fromInt cellSize ++ "px")
         , style "width" (String.fromInt cellSize ++ "px")
         , style "background" (colorForCell cell)
         , style "margin" "1px"
+        , (Ev.onClick <| Toggle <| xyFromIdx idx)
         ]
         [ text "" ]
 
 
-viewRow : List Cell -> Html Msg
-viewRow row =
+viewRow : Int -> List Cell -> Html Msg
+viewRow rowIdx row =
     div
         [ style "display" "flex"
-        , style "flex-direction" "row"
+        , style "flex-direction" "row" 
         ]
-        (List.map
-            viewCell
+        (List.indexedMap
+            (\idx -> \cell -> viewCell (idxFromXY idx rowIdx) cell)
             row
         )
 
@@ -146,10 +253,19 @@ viewGrid grid =
         , style "flex-direction" "column"
         , style "align-items" "center"
         ]
-        (List.range 0 (gridSize - 1)
-            |> List.map (takeRow grid)
-            |> List.map viewRow
+        (grid
+            |> takeRowsFromGrid gridSize
+            |> List.indexedMap viewRow
         )
+
+
+viewControls : Html Msg
+viewControls =
+    div
+        [ class "controls" ]
+        [ button [ Ev.onClick GenerateRandomSeed ] [ text "Generate 🌍" ]
+        , button [ Ev.onClick Step ] [ text "Step 🔜" ]
+        ]
 
 
 
@@ -160,7 +276,12 @@ viewGrid grid =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Time.every 1000 Tick
+    Time.every 100 <| \_ -> Step
+
+
+randomInitialSeedMsg : Cmd Msg
+randomInitialSeedMsg =
+    Random.generate Seed (generateGrid (gridSize * gridSize))
 
 
 init : () -> ( Model, Cmd Msg )
@@ -168,13 +289,13 @@ init _ =
     ( { grid =
             Array.fromList []
       }
-    , Random.generate InitialSeed (generateGrid (gridSize * gridSize))
+    , randomInitialSeedMsg
     )
 
 
 generateCell : Generator Cell
 generateCell =
-    Random.uniform Dead [ Alive ]
+    Random.uniform Dead [ Dead, Alive ]
 
 
 generateGrid : Int -> Generator (List Cell)
